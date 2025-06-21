@@ -80,6 +80,8 @@ final class TwitterEmbedGenerator {
             }
             
             task.resume()
+            
+            sleep(2*UInt32(attempts)) // Wait before retrying
         }
 
         _ = sema.wait(timeout: .now() + 15)
