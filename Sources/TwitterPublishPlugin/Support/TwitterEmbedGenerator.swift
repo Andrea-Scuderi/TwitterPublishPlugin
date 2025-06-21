@@ -21,7 +21,7 @@ final class TwitterEmbedGenerator {
     }
 
     private let session = URLSession(configuration: .default)
-    private let baseURL = "https://publish.twitter.com/oembed?url="
+    private let baseURL = "https://publish.x.com/oembed?url="
 
     let tweetURL: URL
 
@@ -36,9 +36,6 @@ final class TwitterEmbedGenerator {
 
         var result: Result<EmbeddedTweet, Error> = .failure(.timeout)
         let sema = DispatchSemaphore(value: 0)
-        
-        // add a delay to allow the request to complete
-        sleep(5)
 
         let task = session.dataTask(with: req) { data, res, error in
             defer { sema.signal() }
