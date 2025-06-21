@@ -21,7 +21,7 @@ final class TwitterEmbedGenerator {
     }
 
     private let session = URLSession(configuration: .default)
-    private let baseURL = "https://publish.x.com/oembed?url="
+    private let baseURL = "https://publish.twitter.com/oembed?url="
 
     let tweetURL: URL
 
@@ -36,44 +36,51 @@ final class TwitterEmbedGenerator {
 
         var result: Result<EmbeddedTweet, Error> = .failure(.timeout)
         let sema = DispatchSemaphore(value: 0)
+        
+        var attempts = 0
 
-        let task = session.dataTask(with: req) { data, res, error in
-            defer { sema.signal() }
-
-            let suffix = "while processing the tweet \(self.tweetURL)"
-
-            guard let res = res as? HTTPURLResponse else {
-                result = .failure(Error(localizedDescription: "Unexpected response \(suffix)"))
-                return
-            }
-
-            guard res.statusCode == 200 else {
-                result = .failure(Error(localizedDescription: "Twitter's API returned error code \(res.statusCode) \(suffix)"))
-                return
-            }
-
-            guard let data = data else {
-                if let error = error {
-                    result = .failure(Error(localizedDescription: "The request failed with error \(error) \(suffix)"))
-                } else {
-                    result = .failure(Error(localizedDescription: "The request returned no data \(suffix)"))
+        while attempts < 5, result.isError {
+            
+            attempts += 1
+            
+            let task = session.dataTask(with: req) { data, res, error in
+                defer { sema.signal() }
+                
+                let suffix = "while processing the tweet \(self.tweetURL)"
+                
+                guard let res = res as? HTTPURLResponse else {
+                    result = .failure(Error(localizedDescription: "Unexpected response \(suffix)"))
+                    return
                 }
-                return
+                
+                guard res.statusCode == 200 else {
+                    result = .failure(Error(localizedDescription: "Twitter's API returned error code \(res.statusCode) \(suffix)"))
+                    return
+                }
+                
+                guard let data = data else {
+                    if let error = error {
+                        result = .failure(Error(localizedDescription: "The request failed with error \(error) \(suffix)"))
+                    } else {
+                        result = .failure(Error(localizedDescription: "The request returned no data \(suffix)"))
+                    }
+                    return
+                }
+                
+                do {
+                    let decoder = JSONDecoder()
+                    decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    
+                    let tweet = try decoder.decode(EmbeddedTweet.self, from: data)
+                    
+                    result = .success(tweet)
+                } catch {
+                    result = .failure(Error(localizedDescription: "Error decoding: \(error) \(suffix)"))
+                }
             }
-
-            do {
-                let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-
-                let tweet = try decoder.decode(EmbeddedTweet.self, from: data)
-
-                result = .success(tweet)
-            } catch {
-                result = .failure(Error(localizedDescription: "Error decoding: \(error) \(suffix)"))
-            }
+            
+            task.resume()
         }
-
-        task.resume()
 
         _ = sema.wait(timeout: .now() + 15)
 
@@ -97,3 +104,16 @@ final class TwitterEmbedGenerator {
     }
 
 }
+
+extension Result where Success == EmbeddedTweet, Failure == TwitterEmbedGenerator.Error {
+ 
+    var isError: Bool {
+        switch self {
+        case .success:
+            return false
+        case .failure:
+            return true
+        }
+    }
+}
+
