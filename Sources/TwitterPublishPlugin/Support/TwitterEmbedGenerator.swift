@@ -36,6 +36,9 @@ final class TwitterEmbedGenerator {
 
         var result: Result<EmbeddedTweet, Error> = .failure(.timeout)
         let sema = DispatchSemaphore(value: 0)
+        
+        // add a delay to allow the request to complete
+        sleep(1)
 
         let task = session.dataTask(with: req) { data, res, error in
             defer { sema.signal() }
